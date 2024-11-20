@@ -21,10 +21,10 @@ class MoonLanderGame:
         self.clock = pygame.time.Clock()
 
         # Clock tick rate
-        self.CLOCK_SPEED = 400  # Reduced for better visualization
+        self.CLOCK_SPEED = 60  # Reduced for better visualization
 
         # Maximum run time (in game seconds)
-        self.MAX_RUN_TIME = 1000  # Reduced from 1000 to make it more reasonable
+        # self.MAX_RUN_TIME = 1000  # Reduced from 1000 to make it more reasonable
 
         # Load and resize the rocket image
         self.rocket_img = pygame.image.load("Rocket.png")
@@ -46,7 +46,7 @@ class MoonLanderGame:
         self.GRAVITY = 0.05  # Reduced from 0.1 to make it easier to control
         self.THRUST = 0.1   # Reduced from 0.2 to make it easier to control
         self.ROTATION_SPEED = 3
-        self.MAX_SPEED = 1
+        self.MAX_SPEED = 5
         self.MAX_ANGULAR_VELOCITY = 10
 
         # Initialize font
