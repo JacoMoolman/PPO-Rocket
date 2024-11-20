@@ -44,7 +44,7 @@ class MoonLanderGame:
 
         # Physics constants
         self.GRAVITY = 0.05  # Reduced from 0.1 to make it easier to control
-        self.THRUST = 0.1   # Reduced from 0.2 to make it easier to control
+        self.THRUST = 0.5   # Reduced from 0.2 to make it easier to control
         self.ROTATION_SPEED = 3
         self.MAX_SPEED = 5
         self.MAX_ANGULAR_VELOCITY = 10
