@@ -86,11 +86,20 @@ class DDPG():
             return
         
         batch = random.sample(self.memory, self.batch_size)
-        state_batch = torch.FloatTensor([x[0] for x in batch]).to(self.device)
-        action_batch = torch.FloatTensor([x[1] for x in batch]).to(self.device)
-        reward_batch = torch.FloatTensor([x[2] for x in batch]).to(self.device)
-        done_batch = torch.FloatTensor([x[3] for x in batch]).to(self.device)
-        next_state_batch = torch.FloatTensor([x[4] for x in batch]).to(self.device)
+        
+        # Convert batch to numpy arrays first
+        states = np.array([x[0] for x in batch])
+        actions = np.array([x[1] for x in batch])
+        rewards = np.array([x[2] for x in batch])
+        dones = np.array([x[3] for x in batch])
+        next_states = np.array([x[4] for x in batch])
+        
+        # Convert to tensors
+        state_batch = torch.FloatTensor(states).to(self.device)
+        action_batch = torch.FloatTensor(actions).to(self.device)
+        reward_batch = torch.FloatTensor(rewards).to(self.device)
+        done_batch = torch.FloatTensor(dones).to(self.device)
+        next_state_batch = torch.FloatTensor(next_states).to(self.device)
 
         # Update critic
         next_actions = self.pi_target_model(next_state_batch)
@@ -145,33 +154,39 @@ def train_ddpg():
     class DDPGWrapper:
         def __init__(self, agent):
             self.agent = agent
-            self.key = 0  # Add a key attribute to mimic NEAT's genome
         
         def activate(self, inputs):
             # Convert inputs to numpy array
             state = np.array(inputs)
             # Get action from DDPG agent
             actions = self.agent.get_action(state)
+            # Store the current state for learning
+            self.current_state = state
             # Convert continuous actions to binary decisions
             return [float(actions[0] > 0), float(actions[1] > 0), float(actions[2] > 0)]
+        
+        def learn(self, reward, next_state, done):
+            # Get the next action using the target policy
+            next_action = self.agent.get_action(next_state)
+            # Store experience and learn
+            self.agent.fit(self.current_state, next_action, reward, done, next_state)
     
-    num_episodes = 1000
-    best_fitness = float('-inf')
+    # Create game instance with DDPG wrapper
+    net = DDPGWrapper(agent)
+    game = MoonLanderGame(net)
     
-    for episode in range(num_episodes):
-        # Create game instance with DDPG wrapper
-        net = DDPGWrapper(agent)
-        game = MoonLanderGame(net)
+    # Run the game continuously
+    while True:
+        # Run one step of the game
+        state, reward, done = game.run_step()
         
-        # Run the game and get fitness
-        fitness = game.run_genome(net, episode)  # Pass the wrapper instead of None
+        # Let the agent learn from the experience
+        net.learn(reward, state, done)
         
-        # Save best model
-        if fitness > best_fitness:
-            best_fitness = fitness
-            agent.save_model('best_moon_lander.pth')
-        
-        print(f"Episode {episode}, Fitness: {fitness:.2f}, Best Fitness: {best_fitness:.2f}")
+        # Save the model periodically and show progress
+        if game.steps % 1000 == 0:
+            agent.save_model('moon_lander_continuous.pth')
+            print(f"Steps: {game.steps}, Total Score: {game.total_score}, Current Score: {game.score}, Last Reward: {reward:.2f}")
 
 if __name__ == '__main__':
     train_ddpg()
