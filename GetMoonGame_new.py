@@ -8,6 +8,7 @@ class MoonLanderGame:
         self.initialize_game()
         self.steps = 0
         self.total_score = 0
+        self.stationary_time = 0  # Track how long rocket has been stationary
 
     def initialize_game(self):
         # Initialize Pygame
@@ -104,7 +105,7 @@ class MoonLanderGame:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                return None, 0, True
+                return None, 0, True  # Signal game end
 
         # Calculate inputs for neural network
         x_distance = (self.target_pos.x - self.position.x) / self.WIDTH
@@ -174,6 +175,36 @@ class MoonLanderGame:
 
         # Update position
         self.position += self.velocity
+
+        # Handle wall collisions - bounce instead of teleport
+        if self.position.x <= 0:
+            self.position.x = 0
+            self.velocity.x = abs(self.velocity.x) * 0.8  # Bounce with 80% velocity
+        elif self.position.x >= self.WIDTH:
+            self.position.x = self.WIDTH
+            self.velocity.x = -abs(self.velocity.x) * 0.8
+
+        if self.position.y <= 0:
+            self.position.y = 0
+            self.velocity.y = abs(self.velocity.y) * 0.8
+        elif self.position.y >= self.HEIGHT:
+            self.position.y = self.HEIGHT
+            self.velocity.y = -abs(self.velocity.y) * 0.8
+
+        # Check if rocket is nearly stationary
+        if self.velocity.length() < 0.1:  # Very low speed threshold
+            self.stationary_time += 1
+        else:
+            self.stationary_time = 0
+
+        # Reset position if stationary for too long (5 seconds * FPS)
+        if self.stationary_time > 5 * self.CLOCK_SPEED:
+            reward -= 50  # Penalty for being stuck
+            self.position = pygame.math.Vector2(self.WIDTH // 2, self.HEIGHT // 2)
+            self.velocity = pygame.math.Vector2(0, 0)
+            self.stationary_time = 0
+
+        # Update rocket position
         self.rocket_rect.center = self.position
 
         # Calculate reward based on distance improvement
@@ -203,18 +234,6 @@ class MoonLanderGame:
             self.score += 100
             self.total_score += 100  # Keep track of total score
             self.generate_target_position()  # Generate new target
-        
-        # Handle wall collisions - teleport to middle with penalty
-        if (self.position.x <= 0 or self.position.x >= self.WIDTH or 
-            self.position.y <= 0 or self.position.y >= self.HEIGHT):
-            # Apply penalty
-            reward -= 50
-            # Move to center
-            self.position = pygame.math.Vector2(self.WIDTH // 2, self.HEIGHT // 2)
-            # Reset velocity to prevent immediate wall hit after teleport
-            self.velocity = pygame.math.Vector2(0, 0)
-            # Keep the same angle to maintain orientation learning
-            self.rocket_rect.center = self.position
 
         # Update previous angle
         self.prev_angle = self.angle
@@ -229,7 +248,7 @@ class MoonLanderGame:
         # Increment step counter
         self.steps += 1
 
-        return state, reward, done
+        return state, reward, False  # Normal game step
 
     def draw(self):
         # Fill the screen with black color
@@ -273,3 +292,9 @@ class MoonLanderGame:
         # Display total score
         total_score_text = self.font.render(f"Total Score: {self.total_score}", True, (255, 255, 255))
         self.screen.blit(total_score_text, (10, 100))
+
+        # Draw training graphs if they exist
+        if hasattr(self, 'draw_graph') and hasattr(self, 'training_data'):
+            # Draw smaller graphs in top right
+            self.draw_graph(self.screen, self.training_data['scores'], (600, 20), (150, 60), (0, 255, 0), "Score")
+            self.draw_graph(self.screen, self.training_data['rewards'], (600, 100), (150, 60), (0, 0, 255), "Reward")

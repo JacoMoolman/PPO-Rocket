@@ -5,9 +5,11 @@ from copy import deepcopy
 from collections import deque
 import torch.nn as nn
 import random
+import pygame
+import sys
 
 class OUNoise:
-    def __init__(self, action_dimension, mu=0, theta=0.15, sigma=0.3):
+    def __init__(self, action_dimension, mu=0, theta=0.15, sigma=0.5):  
         self.action_dimension = action_dimension
         self.mu = mu
         self.theta = theta
@@ -48,7 +50,7 @@ class NeuralNetwork(nn.Module):
 
 class DDPG():
     def __init__(self, state_dim, action_dim, action_scale, noise_decrease,
-                 gamma=0.999, batch_size=64, q_lr=1e-4, pi_lr=1e-5, tau=0.001, memory_size=100000):
+                 gamma=0.99, batch_size=128, q_lr=1e-3, pi_lr=1e-4, tau=0.005, memory_size=100000):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.action_scale = action_scale
@@ -65,6 +67,7 @@ class DDPG():
         
         self.noise = OUNoise(self.action_dim)
         self.noise_threshold = 1
+        self.min_noise = 0.3  # Minimum noise level
         self.noise_decrease = noise_decrease
         self.gamma = gamma
         self.tau = tau
@@ -127,7 +130,8 @@ class DDPG():
         for target_param, param in zip(self.pi_target_model.parameters(), self.pi_model.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-        self.noise_threshold = max(0.1, self.noise_threshold - self.noise_decrease)
+        # Keep minimum noise level
+        self.noise_threshold = max(self.min_noise, self.noise_threshold - self.noise_decrease)
 
     def save_model(self, filepath):
         torch.save({
@@ -145,48 +149,100 @@ class DDPG():
         self.q_target_model.load_state_dict(checkpoint['q_target_model'])
 
 def train_ddpg():
-    # Initialize DDPG agent
-    # State dimension: 15 (from the game's neural network inputs)
-    # Action dimension: 3 (rotate left, rotate right, thrust)
-    agent = DDPG(state_dim=15, action_dim=3, action_scale=1, noise_decrease=0.0001)
+    def draw_graph(surface, data, pos, size, color, title, max_val=None):
+        if not data:
+            return
+            
+        # Draw border and background
+        pygame.draw.rect(surface, (50, 50, 50), (*pos, *size))
+        pygame.draw.rect(surface, (200, 200, 200), (*pos, *size), 1)
+        
+        # Draw title
+        font = pygame.font.Font(None, 20)  # Smaller font
+        text = font.render(title, True, (200, 200, 200))
+        surface.blit(text, (pos[0], pos[1] - 15))  # Position just above graph
+        
+        # Calculate scaling
+        if max_val is None:
+            max_val = max(max(data), abs(min(data))) if data else 1
+        max_val = max(max_val, 0.1)  # Prevent division by zero
+        min_val = min(data) if data else 0
+        
+        # Draw y-axis labels
+        font_small = pygame.font.Font(None, 16)
+        # Max value
+        max_label = font_small.render(f"{int(max_val)}", True, (200, 200, 200))
+        surface.blit(max_label, (pos[0] - 25, pos[1]))
+        # Min value
+        min_label = font_small.render(f"{int(min_val)}", True, (200, 200, 200))
+        surface.blit(min_label, (pos[0] - 25, pos[1] + size[1] - 10))
+        
+        # Draw points - use all points and scale x-axis to fit
+        points = []
+        for i, val in enumerate(data):
+            x = pos[0] + (i / (len(data) - 1 if len(data) > 1 else 1)) * size[0]
+            scaled_val = (val - min_val) / (max_val - min_val) if max_val != min_val else 0.5
+            y = pos[1] + size[1] - (scaled_val * size[1])
+            points.append((int(x), int(y)))
+            
+        if len(points) > 1:
+            pygame.draw.lines(surface, color, False, points, 2)
+
+    # Initialize DDPG agent with adjusted parameters
+    agent = DDPG(state_dim=15, action_dim=3, action_scale=1, 
+                 noise_decrease=0.00001,  
+                 gamma=0.99,  
+                 batch_size=128,  
+                 q_lr=1e-3,  
+                 pi_lr=1e-4,
+                 tau=0.005)  
     
-    # Create a custom neural network wrapper for the game
+    # Create custom neural network wrapper for the game
     class DDPGWrapper:
         def __init__(self, agent):
             self.agent = agent
         
         def activate(self, inputs):
-            # Convert inputs to numpy array
             state = np.array(inputs)
-            # Get action from DDPG agent
             actions = self.agent.get_action(state)
-            # Store the current state for learning
             self.current_state = state
-            # Convert continuous actions to binary decisions
             return [float(actions[0] > 0), float(actions[1] > 0), float(actions[2] > 0)]
         
         def learn(self, reward, next_state, done):
-            # Get the next action using the target policy
+            if done and next_state is None:  # Window was closed
+                return
             next_action = self.agent.get_action(next_state)
-            # Store experience and learn
             self.agent.fit(self.current_state, next_action, reward, done, next_state)
     
     # Create game instance with DDPG wrapper
     net = DDPGWrapper(agent)
     game = MoonLanderGame(net)
     
+    # Setup data for plotting
+    game.training_data = {'scores': [], 'rewards': []}
+    game.draw_graph = draw_graph
+    
     # Run the game continuously
     while True:
         # Run one step of the game
         state, reward, done = game.run_step()
         
+        # Check if window was closed
+        if done and state is None:
+            print("Game window closed. Exiting...")
+            sys.exit(0)
+        
         # Let the agent learn from the experience
         net.learn(reward, state, done)
         
-        # Save the model periodically and show progress
+        # Update progress every 1000 steps
         if game.steps % 1000 == 0:
             agent.save_model('moon_lander_continuous.pth')
             print(f"Steps: {game.steps}, Total Score: {game.total_score}, Current Score: {game.score}, Last Reward: {reward:.2f}")
+            
+            # Update plot data - keep all points
+            game.training_data['scores'].append(game.total_score)
+            game.training_data['rewards'].append(reward)
 
 if __name__ == '__main__':
     train_ddpg()
