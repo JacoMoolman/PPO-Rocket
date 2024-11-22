@@ -232,6 +232,7 @@ def train_ddpg():
     while True:
         # Run one step of the game
         state, reward, done = game.run_step()
+        game.update_noise(agent.noise_threshold)  # Update noise value in game
         
         # Check if window was closed
         if done and state is None:
@@ -249,6 +250,9 @@ def train_ddpg():
             # Update plot data - keep all points
             game.training_data['rewards'].append(game.total_rewards)
             game.training_data['last_rewards'].append(reward)
+            
+            game.update_noise(agent.noise_threshold)  # Update noise value in game
+            pygame.display.update()
 
 if __name__ == '__main__':
     train_ddpg()

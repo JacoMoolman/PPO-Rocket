@@ -9,6 +9,7 @@ class MoonLanderGame:
         self.steps = 0
         self.total_rewards = 0
         self.stationary_time = 0  # Track how long rocket has been stationary
+        self.noise_value = 0  # Add this to store noise value
 
     def initialize_game(self):
         # Initialize Pygame
@@ -23,9 +24,6 @@ class MoonLanderGame:
 
         # Clock tick rate
         self.CLOCK_SPEED = 60  # Reduced for better visualization
-
-        # Maximum run time (in game seconds)
-        # self.MAX_RUN_TIME = 1000  # Reduced from 1000 to make it more reasonable
 
         # Load and resize the rocket image
         self.rocket_img = pygame.image.load("Rocket.png")
@@ -229,7 +227,8 @@ class MoonLanderGame:
 
         # Check collisions
         if self.rocket_rect.colliderect(self.moon_rect):
-            reward += 100  # Big reward for reaching the moon
+            print("GOT MOON")  # Add print statement here
+            reward += 1000  # Big reward for reaching the moon
             self.generate_target_position()  # Generate new target
 
         # Update previous angle
@@ -288,8 +287,15 @@ class MoonLanderGame:
         total_rewards_text = self.font.render(f"Total Rewards: {self.total_rewards:.2f}", True, (255, 255, 255))
         self.screen.blit(total_rewards_text, (10, 70))
 
+        # Display noise value
+        noise_text = self.font.render(f"Noise: {self.noise_value:.5f}", True, (255, 255, 255))
+        self.screen.blit(noise_text, (10, 100))
+
         # Draw training graphs if they exist
         if hasattr(self, 'draw_graph') and hasattr(self, 'training_data'):
             # Draw smaller graphs in top right
             self.draw_graph(self.screen, self.training_data['rewards'], (600, 20), (150, 60), (0, 255, 0), "Total Rewards")
             self.draw_graph(self.screen, self.training_data['last_rewards'], (600, 100), (150, 60), (0, 0, 255), "Last Reward")
+
+    def update_noise(self, noise):
+        self.noise_value = noise
