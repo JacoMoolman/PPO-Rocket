@@ -244,7 +244,6 @@ def train_ddpg():
         
         # Update progress every 10 steps
         if game.steps % 1 == 0:
-            agent.save_model('moon_lander_continuous.pth')
             print(f"Steps: {game.steps}, Total Rewards: {game.total_rewards:.2f}, Last Reward: {reward:.2f}")
             
             # Update plot data - keep all points
