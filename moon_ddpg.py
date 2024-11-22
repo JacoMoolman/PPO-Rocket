@@ -148,10 +148,16 @@ class DDPG():
         self.pi_target_model.load_state_dict(checkpoint['pi_target_model'])
         self.q_target_model.load_state_dict(checkpoint['q_target_model'])
 
+# Configuration for graph display
+GRAPH_HISTORY_LENGTH = 500  # Number of data points to show in the scrolling graph
+
 def train_ddpg():
     def draw_graph(surface, data, pos, size, color, title, max_val=None):
         if not data:
             return
+            
+        # Only use the last GRAPH_HISTORY_LENGTH points
+        display_data = data[-GRAPH_HISTORY_LENGTH:] if len(data) > GRAPH_HISTORY_LENGTH else data
             
         # Draw border and background
         pygame.draw.rect(surface, (50, 50, 50), (*pos, *size))
@@ -164,9 +170,9 @@ def train_ddpg():
         
         # Calculate scaling
         if max_val is None:
-            max_val = max(max(data), abs(min(data))) if data else 1
+            max_val = max(max(display_data), abs(min(display_data))) if display_data else 1
         max_val = max(max_val, 0.1)  # Prevent division by zero
-        min_val = min(data) if data else 0
+        min_val = min(display_data) if display_data else 0
         
         # Draw y-axis labels
         font_small = pygame.font.Font(None, 16)
@@ -179,8 +185,8 @@ def train_ddpg():
         
         # Draw points - use all points and scale x-axis to fit
         points = []
-        for i, val in enumerate(data):
-            x = pos[0] + (i / (len(data) - 1 if len(data) > 1 else 1)) * size[0]
+        for i, val in enumerate(display_data):
+            x = pos[0] + (i / (len(display_data) - 1 if len(display_data) > 1 else 1)) * size[0]
             scaled_val = (val - min_val) / (max_val - min_val) if max_val != min_val else 0.5
             y = pos[1] + size[1] - (scaled_val * size[1])
             points.append((int(x), int(y)))
