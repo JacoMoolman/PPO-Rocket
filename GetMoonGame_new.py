@@ -23,7 +23,7 @@ class MoonLanderGame:
         self.clock = pygame.time.Clock()
 
         # Clock tick rate
-        self.CLOCK_SPEED = 60  # Reduced for better visualization
+        self.CLOCK_SPEED = 400  # Reduced for better visualization
 
         # Load and resize the rocket image
         self.rocket_img = pygame.image.load("Rocket.png")
