@@ -144,12 +144,12 @@ class DDPG():
     def load_model(self, filepath):
         checkpoint = torch.load(filepath)
         self.pi_model.load_state_dict(checkpoint['pi_model'])
-        self.q_model.load_state_dict(checkpoint['q_model'])
+        self.q_model.load_state_dict(checkpoint['q_moel'])
         self.pi_target_model.load_state_dict(checkpoint['pi_target_model'])
         self.q_target_model.load_state_dict(checkpoint['q_target_model'])
 
 # Configuration for graph display
-GRAPH_HISTORY_LENGTH = 500  # Number of data points to show in the scrolling graph
+GRAPH_HISTORY_LENGTH = 4000  # Number of data points to show in the scrolling graph
 
 def train_ddpg():
     def draw_graph(surface, data, pos, size, color, title, max_val=None):
@@ -243,7 +243,7 @@ def train_ddpg():
         net.learn(reward, state, done)
         
         # Update progress every 10 steps
-        if game.steps % 10 == 0:
+        if game.steps % 1 == 0:
             agent.save_model('moon_lander_continuous.pth')
             print(f"Steps: {game.steps}, Total Rewards: {game.total_rewards:.2f}, Last Reward: {reward:.2f}")
             

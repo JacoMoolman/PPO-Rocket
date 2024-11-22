@@ -207,7 +207,7 @@ class MoonLanderGame:
         # Calculate reward based on distance improvement
         current_distance = self.position.distance_to(self.target_pos)
         distance_improvement = prev_distance - current_distance
-        reward += distance_improvement * 10  # Scale the reward
+        reward += distance_improvement * 15  # Increased scale for distance improvement
 
         # Add a small reward for proper orientation towards the moon
         angle_to_target = math.degrees(math.atan2(
@@ -218,12 +218,7 @@ class MoonLanderGame:
         if angle_diff > 180:
             angle_diff = 360 - angle_diff
         orientation_reward = (180 - angle_diff) / 180.0  # 1.0 when perfect, 0.0 when opposite
-        reward += orientation_reward * 0.1
-
-        # Add small reward for controlled movement
-        speed = self.velocity.length()
-        if speed < self.MAX_SPEED:
-            reward += 0.1  # Small reward for controlled speed
+        reward += orientation_reward * 0.2  # Slightly increased orientation reward
 
         # Check collisions
         if self.rocket_rect.colliderect(self.moon_rect):
