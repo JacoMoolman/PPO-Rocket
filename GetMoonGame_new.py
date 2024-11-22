@@ -52,6 +52,10 @@ class MoonLanderGame:
         pygame.font.init()
         self.font = pygame.font.Font(None, 36)
 
+        # Initialize rocket trails
+        self.trail_points = []  # List to store trail points and their opacity
+        self.MAX_TRAIL_LENGTH = 20  # Maximum number of trail points to store
+
         # Generate random stars
         self.stars = []
         for _ in range(100):
@@ -204,6 +208,26 @@ class MoonLanderGame:
         # Update rocket position
         self.rocket_rect.center = self.position
 
+        # Update trail points
+        if self.thrust:
+            # Calculate the position for the trail (at the bottom of the rocket)
+            trail_offset = pygame.math.Vector2(0, self.rocket_rect.height * 0.5).rotate(-self.angle)
+            trail_pos = self.position + trail_offset
+            
+            # Add new trail point with full opacity
+            self.trail_points.append({"pos": trail_pos, "opacity": 255})
+            
+            # Remove old trail points if we exceed the maximum length
+            if len(self.trail_points) > self.MAX_TRAIL_LENGTH:
+                self.trail_points.pop(0)
+        
+        # Fade out existing trail points
+        for point in self.trail_points:
+            point["opacity"] = max(0, point["opacity"] - 10)  # Decrease opacity
+        
+        # Remove completely faded points
+        self.trail_points = [p for p in self.trail_points if p["opacity"] > 0]
+
         # Calculate reward based on distance improvement
         current_distance = self.position.distance_to(self.target_pos)
         distance_improvement = prev_distance - current_distance
@@ -251,6 +275,19 @@ class MoonLanderGame:
         for star in self.stars:
             x, y, size = star
             pygame.draw.circle(self.screen, (255, 255, 255), (x, y), size)
+
+        # Draw the trails
+        for i, point in enumerate(self.trail_points):
+            # Create a surface for the trail point with alpha channel
+            size = max(2, 4 * (i / len(self.trail_points)) if self.trail_points else 2)  # Size increases towards the rocket
+            trail_surface = pygame.Surface((int(size * 2), int(size * 2)), pygame.SRCALPHA)
+            
+            # Draw the trail point with fading opacity
+            color = (255, 165, 0, point["opacity"])  # Orange color with fading opacity
+            pygame.draw.circle(trail_surface, color, (int(size), int(size)), int(size))
+            
+            # Blit the trail surface onto the screen
+            self.screen.blit(trail_surface, (int(point["pos"].x - size), int(point["pos"].y - size)))
 
         # Draw the moon
         self.screen.blit(self.moon_img, self.moon_rect)
