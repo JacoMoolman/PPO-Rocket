@@ -219,7 +219,7 @@ def train_ddpg():
     game = MoonLanderGame(net)
     
     # Setup data for plotting
-    game.training_data = {'scores': [], 'rewards': []}
+    game.training_data = {'rewards': [], 'last_rewards': []}
     game.draw_graph = draw_graph
     
     # Run the game continuously
@@ -235,14 +235,14 @@ def train_ddpg():
         # Let the agent learn from the experience
         net.learn(reward, state, done)
         
-        # Update progress every 1000 steps
-        if game.steps % 1000 == 0:
+        # Update progress every 10 steps
+        if game.steps % 10 == 0:
             agent.save_model('moon_lander_continuous.pth')
-            print(f"Steps: {game.steps}, Total Score: {game.total_score}, Current Score: {game.score}, Last Reward: {reward:.2f}")
+            print(f"Steps: {game.steps}, Total Rewards: {game.total_rewards:.2f}, Last Reward: {reward:.2f}")
             
             # Update plot data - keep all points
-            game.training_data['scores'].append(game.total_score)
-            game.training_data['rewards'].append(reward)
+            game.training_data['rewards'].append(game.total_rewards)
+            game.training_data['last_rewards'].append(reward)
 
 if __name__ == '__main__':
     train_ddpg()

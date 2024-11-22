@@ -7,7 +7,7 @@ class MoonLanderGame:
         self.net = net
         self.initialize_game()
         self.steps = 0
-        self.total_score = 0
+        self.total_rewards = 0
         self.stationary_time = 0  # Track how long rocket has been stationary
 
     def initialize_game(self):
@@ -72,7 +72,6 @@ class MoonLanderGame:
         self.angular_velocity = 0
         self.prev_angle = 0
         self.running = True
-        self.score = 0
         self.thrust = False
         self.target_pos = None
 
@@ -231,8 +230,6 @@ class MoonLanderGame:
         # Check collisions
         if self.rocket_rect.colliderect(self.moon_rect):
             reward += 100  # Big reward for reaching the moon
-            self.score += 100
-            self.total_score += 100  # Keep track of total score
             self.generate_target_position()  # Generate new target
 
         # Update previous angle
@@ -247,6 +244,8 @@ class MoonLanderGame:
         
         # Increment step counter
         self.steps += 1
+
+        self.total_rewards += reward
 
         return state, reward, False  # Normal game step
 
@@ -285,16 +284,12 @@ class MoonLanderGame:
         timer_text = self.font.render(f"Time: {int(self.timer / 60):02d}.{int(self.timer % 60):02d}", True, (255, 255, 255))
         self.screen.blit(timer_text, (10, 10))
 
-        # Display current score
-        score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
-        self.screen.blit(score_text, (10, 70))
-
-        # Display total score
-        total_score_text = self.font.render(f"Total Score: {self.total_score}", True, (255, 255, 255))
-        self.screen.blit(total_score_text, (10, 100))
+        # Display total rewards
+        total_rewards_text = self.font.render(f"Total Rewards: {self.total_rewards:.2f}", True, (255, 255, 255))
+        self.screen.blit(total_rewards_text, (10, 70))
 
         # Draw training graphs if they exist
         if hasattr(self, 'draw_graph') and hasattr(self, 'training_data'):
             # Draw smaller graphs in top right
-            self.draw_graph(self.screen, self.training_data['scores'], (600, 20), (150, 60), (0, 255, 0), "Score")
-            self.draw_graph(self.screen, self.training_data['rewards'], (600, 100), (150, 60), (0, 0, 255), "Reward")
+            self.draw_graph(self.screen, self.training_data['rewards'], (600, 20), (150, 60), (0, 255, 0), "Total Rewards")
+            self.draw_graph(self.screen, self.training_data['last_rewards'], (600, 100), (150, 60), (0, 0, 255), "Last Reward")
