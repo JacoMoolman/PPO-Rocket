@@ -57,9 +57,9 @@ class DDPG():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # Actor (Policy) network
-        self.pi_model = NeuralNetwork(self.state_dim, 400, 300, self.action_dim, output_tanh=True).to(self.device)
+        self.pi_model = NeuralNetwork(self.state_dim, 256, 128, self.action_dim, output_tanh=True).to(self.device)
         # Critic (Value) network
-        self.q_model = NeuralNetwork(self.state_dim + self.action_dim, 400, 300, 1, output_tanh=False).to(self.device)
+        self.q_model = NeuralNetwork(self.state_dim + self.action_dim, 256, 128, 1, output_tanh=False).to(self.device)
         
         # Target networks
         self.pi_target_model = deepcopy(self.pi_model).to(self.device)
@@ -196,12 +196,13 @@ def train_ddpg():
 
     # Initialize DDPG agent with adjusted parameters
     agent = DDPG(state_dim=15, action_dim=3, action_scale=1, 
-                 noise_decrease=0.00001,  
+                 noise_decrease=0.00002,  # Increased for faster exploration decay
                  gamma=0.99,  
-                 batch_size=128,  
-                 q_lr=1e-3,  
-                 pi_lr=1e-4,
-                 tau=0.005)  
+                 batch_size=256,  # Increased batch size
+                 q_lr=3e-3,  # Slightly increased learning rate
+                 pi_lr=3e-4,  # Slightly increased learning rate
+                 tau=0.01,  # Increased for faster target network updates
+                 memory_size=50000)  # Reduced memory size
     
     # Create custom neural network wrapper for the game
     class DDPGWrapper:
