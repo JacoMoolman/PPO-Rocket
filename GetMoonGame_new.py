@@ -305,23 +305,19 @@ class MoonLanderGame:
         rotated_rect = rotated_rocket.get_rect(center=self.rocket_rect.center)
         self.screen.blit(rotated_rocket, rotated_rect)
 
-        # Display speed
+        # Display speed (moved up)
         speed = self.velocity.length()
         velocity_text = f"Speed: {speed:.2f}"
         speed_surface = self.font.render(velocity_text, True, (255, 255, 255))
-        self.screen.blit(speed_surface, (10, 40))
+        self.screen.blit(speed_surface, (10, 10))  # Changed from 40 to 10
 
-        # Render timer text
-        timer_text = self.font.render(f"Time: {int(self.timer / 60):02d}.{int(self.timer % 60):02d}", True, (255, 255, 255))
-        self.screen.blit(timer_text, (10, 10))
-
-        # Display total rewards
+        # Display total rewards (moved up)
         total_rewards_text = self.font.render(f"Total Rewards: {self.total_rewards:.2f}", True, (255, 255, 255))
-        self.screen.blit(total_rewards_text, (10, 70))
+        self.screen.blit(total_rewards_text, (10, 40))  # Changed from 70 to 40
 
-        # Display noise value
+        # Display noise value (moved up)
         noise_text = self.font.render(f"Noise: {self.noise_value:.5f}", True, (255, 255, 255))
-        self.screen.blit(noise_text, (10, 100))
+        self.screen.blit(noise_text, (10, 70))  # Changed from 100 to 70
 
         # Draw training graphs if they exist
         if hasattr(self, 'draw_graph') and hasattr(self, 'training_data'):
