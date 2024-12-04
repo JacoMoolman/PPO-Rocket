@@ -142,7 +142,9 @@ def train_ppo(num_envs=10):
         model.save("moon_lander_ppo_final")
         
     except KeyboardInterrupt:
-        print("\nTraining interrupted. Saving model...")
+        print("\nTraining interrupted. Cleaning up environments...")
+        env.close()  # Close all subprocesses
+        print("Saving model...")
         model.save("moon_lander_ppo_interrupted")
     
     return model
