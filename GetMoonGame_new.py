@@ -23,7 +23,7 @@ class MoonLanderGame:
         self.clock = pygame.time.Clock()
 
         # Clock tick rate
-        self.CLOCK_SPEED = 400  # Reduced for better visualization
+        self.CLOCK_SPEED = 60  # Reduced from 400 to 60 for smoother display
 
         # Load and resize the rocket image
         self.rocket_img = pygame.image.load("Rocket.png")
@@ -42,10 +42,10 @@ class MoonLanderGame:
         self.moon_rect = self.moon_img.get_rect()
 
         # Physics constants
-        self.GRAVITY = 0.05  # Reduced from 0.1 to make it easier to control
-        self.THRUST = 0.5   # Reduced from 0.2 to make it easier to control
+        self.GRAVITY = 0.05  
+        self.THRUST = 0.5
         self.ROTATION_SPEED = 3
-        self.MAX_SPEED = 5
+        self.MAX_SPEED = 3
         self.MAX_ANGULAR_VELOCITY = 10
 
         # Initialize font
@@ -86,6 +86,9 @@ class MoonLanderGame:
 
         # Reset timer
         self.timer = 0
+        
+        # Reset steps counter
+        self.steps = 0
 
         # Reset zero speed time, zero X movement time, and penalty flag
         self.zero_speed_time = 0
@@ -109,40 +112,42 @@ class MoonLanderGame:
                 return None, 0, True  # Signal game end
 
         # Calculate inputs for neural network
+        # 1. Position relative to target (normalized)
         x_distance = (self.target_pos.x - self.position.x) / self.WIDTH
         y_distance = (self.target_pos.y - self.position.y) / self.HEIGHT
+        
+        # 2. Relative angle to target (normalized to [-1, 1])
         angle_to_moon = math.degrees(math.atan2(y_distance, x_distance))
-        normalized_angle = angle_to_moon / 180
-
+        relative_angle = (angle_to_moon - self.angle) % 360
+        if relative_angle > 180:
+            relative_angle = relative_angle - 360
+        normalized_angle = relative_angle / 180
+        
+        # 3. Current velocity (normalized)
+        normalized_velocity_x = self.velocity.x / self.MAX_SPEED
+        normalized_velocity_y = self.velocity.y / self.MAX_SPEED
+        
+        # 4. Angular velocity (normalized)
         elapsed_time = self.clock.get_time() / 1000
         if elapsed_time > 0:
             angular_velocity = (self.angle - self.prev_angle) / elapsed_time
             normalized_angular_velocity = angular_velocity / self.MAX_ANGULAR_VELOCITY
         else:
             normalized_angular_velocity = 0
-
-        relative_velocity_x = self.velocity.x / self.MAX_SPEED
-        relative_velocity_y = self.velocity.y / self.MAX_SPEED
+            
+        # 5. Distance to walls (normalized)
         distance_to_vertical_edge = min(self.position.x, self.WIDTH - self.position.x) / self.WIDTH
         distance_to_horizontal_edge = min(self.position.y, self.HEIGHT - self.position.y) / self.HEIGHT
-        angle_between_direction_velocity = math.atan2(self.velocity.y, self.velocity.x) - math.radians(self.angle)
 
         state = [
-            self.position.x / self.WIDTH,
-            self.position.y / self.HEIGHT,
-            self.angle / 360,
-            self.velocity.x / self.MAX_SPEED,
-            self.velocity.y / self.MAX_SPEED,
-            self.position.distance_to(self.target_pos) / math.sqrt(self.WIDTH**2 + self.HEIGHT**2),
-            x_distance,
-            y_distance,
-            normalized_angle,
-            normalized_angular_velocity,
-            relative_velocity_x,
-            relative_velocity_y,
-            distance_to_vertical_edge,
-            distance_to_horizontal_edge,
-            angle_between_direction_velocity
+            x_distance,                    # Distance to target X
+            y_distance,                    # Distance to target Y
+            normalized_angle,              # Angle needed to face target
+            normalized_velocity_x,         # Current X velocity
+            normalized_velocity_y,         # Current Y velocity
+            normalized_angular_velocity,   # Current rotation speed
+            distance_to_vertical_edge,     # Distance to left/right walls
+            distance_to_horizontal_edge,   # Distance to top/bottom walls
         ]
 
         # Get actions from neural network
@@ -156,15 +161,16 @@ class MoonLanderGame:
         prev_distance = self.position.distance_to(self.target_pos)
 
         # Apply actions
-        if outputs[0] > 0.5:
+        if outputs[0] or outputs[1]:  # Strong or weak right rotation
             self.angle += self.ROTATION_SPEED
-        if outputs[1] > 0.5:
+        if outputs[2] or outputs[3]:  # Strong or weak left rotation
             self.angle -= self.ROTATION_SPEED
-        self.thrust = outputs[2] > 0.5
+        self.angle = self.angle % 360  # Normalize angle to 0-360 range
+        self.thrust = outputs[4] or outputs[5] or outputs[6]  # Any level of thrust
 
         # Apply thrust
         if self.thrust:
-            thrust_vector = pygame.math.Vector2(0, -self.THRUST).rotate(-self.angle)
+            thrust_vector = pygame.math.Vector2(0, -self.THRUST).rotate(-self.angle)  # Put back the negative sign
             self.velocity += thrust_vector
 
         # Apply gravity
@@ -200,10 +206,8 @@ class MoonLanderGame:
 
         # Reset position if stationary for too long (5 seconds * FPS)
         if self.stationary_time > 5 * self.CLOCK_SPEED:
-            reward -= 50  # Penalty for being stuck
-            self.position = pygame.math.Vector2(self.WIDTH // 2, self.HEIGHT // 2)
-            self.velocity = pygame.math.Vector2(0, 0)
-            self.stationary_time = 0
+            reward -= 100  # Much bigger penalty for being stuck
+            return state, reward, True  # End episode when stuck
 
         # Update rocket position
         self.rocket_rect.center = self.position
@@ -231,24 +235,49 @@ class MoonLanderGame:
         # Calculate reward based on distance improvement
         current_distance = self.position.distance_to(self.target_pos)
         distance_improvement = prev_distance - current_distance
-        reward += distance_improvement * 15  # Increased scale for distance improvement
+        reward += distance_improvement * 5  # Keep the distance improvement reward
 
-        # Add a small reward for proper orientation towards the moon
-        angle_to_target = math.degrees(math.atan2(
-            self.target_pos.y - self.position.y,
-            self.target_pos.x - self.position.x
-        ))
-        angle_diff = abs(angle_to_target - self.angle) % 360
-        if angle_diff > 180:
-            angle_diff = 360 - angle_diff
-        orientation_reward = (180 - angle_diff) / 180.0  # 1.0 when perfect, 0.0 when opposite
-        reward += orientation_reward * 0.2  # Slightly increased orientation reward
+        # Penalty for moving away from moon
+        if distance_improvement < 0:
+            reward += distance_improvement * 10  # Additional penalty for moving away
 
-        # Check collisions
+        # Calculate angle to moon for rewards
+        dx = self.target_pos.x - self.position.x
+        dy = self.target_pos.y - self.position.y
+        angle_to_moon = math.degrees(math.atan2(-dy, dx))  # Negative dy because pygame y increases downward
+        relative_angle = (self.angle - angle_to_moon + 90) % 360  # +90 because rocket points up at 0
+        if relative_angle > 180:
+            relative_angle = 360 - relative_angle
+            
+        # Simple reward for pointing at moon: +10 when perfect, -10 when opposite
+        reward += (180 - relative_angle) / 18.0  # Scales from -10 to +10
+
+        # Penalty for thrusting in wrong direction
+        if self.thrust and relative_angle > 90:
+            reward -= 5  # Big penalty for thrusting while pointing away
+
+        # Time-based penalties
+        reward -= 0.1  # Small constant penalty per timestep
+        
+        # Path efficiency penalty
+        straight_line_distance = math.sqrt(dx * dx + dy * dy)
+        if self.steps > 0:
+            efficiency_penalty = -0.01 * (self.steps - straight_line_distance / self.MAX_SPEED)
+            reward += max(efficiency_penalty, -1)  # Cap the penalty at -1 per step
+
+        # Check collisions with better reward structure
         if self.rocket_rect.colliderect(self.moon_rect):
-            print("GOT MOON")  # Add print statement here
-            reward += 1000  # Big reward for reaching the moon
-            self.generate_target_position()  # Generate new target
+            # Base reward for hitting the target
+            reward += 1000
+            
+            # Time bonus - more reward for faster completion
+            time_bonus = max(0, 2000 - (self.steps * 2))  # Starts at 2000, decreases by 2 per step
+            reward += time_bonus
+            
+            print(f"HIT MOON - Steps: {self.steps}, Time Bonus: {time_bonus:.2f}")
+            # Generate new target position and reset steps counter
+            self.generate_target_position()
+            self.steps = 0  # Reset steps counter when moon is hit
 
         # Update previous angle
         self.prev_angle = self.angle
@@ -277,47 +306,58 @@ class MoonLanderGame:
             pygame.draw.circle(self.screen, (255, 255, 255), (x, y), size)
 
         # Draw the trails
-        for i, point in enumerate(self.trail_points):
-            # Create a surface for the trail point with alpha channel
-            size = max(2, 4 * (i / len(self.trail_points)) if self.trail_points else 2)  # Size increases towards the rocket
-            trail_surface = pygame.Surface((int(size * 2), int(size * 2)), pygame.SRCALPHA)
-            
-            # Draw the trail point with fading opacity
-            color = (255, 165, 0, point["opacity"])  # Orange color with fading opacity
-            pygame.draw.circle(trail_surface, color, (int(size), int(size)), int(size))
-            
-            # Blit the trail surface onto the screen
-            self.screen.blit(trail_surface, (int(point["pos"].x - size), int(point["pos"].y - size)))
+        for point in self.trail_points:
+            pygame.draw.circle(self.screen, (255, 165, 0, point["opacity"]), (int(point["pos"].x), int(point["pos"].y)), 2)
 
         # Draw the moon
         self.screen.blit(self.moon_img, self.moon_rect)
 
-        # Draw the flames if thrust is applied
-        if self.thrust:
-            rotated_flames = pygame.transform.rotate(self.flames_img, self.angle)
-            flames_offset = pygame.math.Vector2(0, self.rocket_rect.height * 0.75).rotate(-self.angle)
-            flames_pos = self.rocket_rect.center + flames_offset
-            flames_rect = rotated_flames.get_rect(center=flames_pos)
-            self.screen.blit(rotated_flames, flames_rect)
-
-        # Draw the rotated rocket
+        # Draw the rocket
         rotated_rocket = pygame.transform.rotate(self.rocket_img, self.angle)
         rotated_rect = rotated_rocket.get_rect(center=self.rocket_rect.center)
         self.screen.blit(rotated_rocket, rotated_rect)
 
-        # Display speed (moved up)
-        speed = self.velocity.length()
-        velocity_text = f"Speed: {speed:.2f}"
-        speed_surface = self.font.render(velocity_text, True, (255, 255, 255))
-        self.screen.blit(speed_surface, (10, 10))  # Changed from 40 to 10
+        # Draw flames if thrusting
+        if self.thrust:
+            rotated_flames = pygame.transform.rotate(self.flames_img, self.angle)
+            flames_rect = rotated_flames.get_rect(center=self.rocket_rect.center)
+            flames_rect.centerx += math.sin(math.radians(self.angle)) * self.rocket_rect.height / 2
+            flames_rect.centery += math.cos(math.radians(self.angle)) * self.rocket_rect.height / 2
+            self.screen.blit(rotated_flames, flames_rect)
 
-        # Display total rewards (moved up)
+        # Draw text information
+        font = pygame.font.Font(None, 36)
+        
+        # Display total rewards
         total_rewards_text = self.font.render(f"Total Rewards: {self.total_rewards:.2f}", True, (255, 255, 255))
-        self.screen.blit(total_rewards_text, (10, 40))  # Changed from 70 to 40
-
-        # Display noise value (moved up)
+        self.screen.blit(total_rewards_text, (10, 10))
+        
+        # Display time counter
+        time_text = self.font.render(f"Time: {self.steps}", True, (255, 255, 255))
+        self.screen.blit(time_text, (10, 50))
+        
+        # Display noise value
         noise_text = self.font.render(f"Noise: {self.noise_value:.5f}", True, (255, 255, 255))
-        self.screen.blit(noise_text, (10, 70))  # Changed from 100 to 70
+        self.screen.blit(noise_text, (10, 90))
+        
+        # Display angle
+        angle_text = self.font.render(f"Angle: {self.angle:.2f}", True, (255, 255, 255))
+        self.screen.blit(angle_text, (10, 130))
+        
+        # Display velocity/speed
+        speed = self.velocity.length()
+        speed_text = self.font.render(f"Speed: {speed:.2f}", True, (255, 255, 255))
+        self.screen.blit(speed_text, (10, 170))
+
+        # Display angle to moon
+        dx = self.target_pos.x - self.position.x
+        dy = self.target_pos.y - self.position.y
+        angle_to_moon = math.degrees(math.atan2(-dy, dx))  # Negative dy because pygame y increases downward
+        relative_angle = (self.angle - angle_to_moon + 90) % 360  # +90 because rocket points up at 0
+        if relative_angle > 180:
+            relative_angle = 360 - relative_angle
+        moon_angle_text = self.font.render(f"Moon Angle: {relative_angle:.2f}", True, (255, 255, 255))
+        self.screen.blit(moon_angle_text, (10, 210))
 
         # Draw training graphs if they exist
         if hasattr(self, 'draw_graph') and hasattr(self, 'training_data'):
