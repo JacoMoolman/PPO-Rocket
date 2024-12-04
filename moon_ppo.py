@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
 import pygame
 from GetMoonGame_new import MoonLanderGame
@@ -83,6 +83,24 @@ def make_env():
         return env
     return _init
 
+class RewardLoggerCallback(BaseCallback):
+    def __init__(self, num_envs, check_freq, verbose=1):
+        super().__init__(verbose)
+        self.check_freq = check_freq
+        self.total_rewards = {i: 0 for i in range(num_envs)}
+        self.step_count = {i: 0 for i in range(num_envs)}
+        
+    def _on_step(self) -> bool:
+        for env_idx in range(len(self.locals['rewards'])):
+            self.total_rewards[env_idx] += self.locals['rewards'][env_idx]
+            self.step_count[env_idx] += 1
+            
+            if self.step_count[env_idx] % self.check_freq == 0:
+                with open(f'game{env_idx+1}.txt', 'a') as f:
+                    f.write(f"{self.total_rewards[env_idx]}\n")
+        
+        return True
+
 def train_ppo(num_envs=10):  
     # Create multiple environments for parallel training
     env = SubprocVecEnv([make_env() for _ in range(num_envs)])
@@ -92,26 +110,30 @@ def train_ppo(num_envs=10):
         "MlpPolicy",
         env,
         verbose=1,
-        learning_rate=5e-4,  # Decreased from 1e-3 to 5e-4 for more gradual learning
+        learning_rate=5e-4,
         n_steps=2048,
         batch_size=256,
         n_epochs=10,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.1,  # Increased from 0.02 to 0.1 to force more exploration
+        ent_coef=0.01,
         policy_kwargs=dict(
             net_arch=dict(
-                pi=[512, 512, 512, 512, 512, 512, 512, 512, 512, 512],  # 10 layers for policy
-                vf=[512, 512, 512, 512, 512, 512, 512, 512, 512, 512]   # 10 layers for value
+                pi=[512, 512, 512, 512, 512, 512, 512, 512, 512, 512],
+                vf=[512, 512, 512, 512, 512, 512, 512, 512, 512, 512]
             )
         )
     )
+    
+    # Create and add our custom callback
+    reward_logger = RewardLoggerCallback(num_envs=num_envs, check_freq=1000)
     
     try:
         # Train the agent
         model.learn(
             total_timesteps=10000000,
+            callback=reward_logger,
             progress_bar=True,
             log_interval=1
         )
