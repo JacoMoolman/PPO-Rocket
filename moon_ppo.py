@@ -89,8 +89,11 @@ class RewardLoggerCallback(BaseCallback):
         self.check_freq = check_freq
         self.total_rewards = {i: 0 for i in range(num_envs)}
         self.step_count = {i: 0 for i in range(num_envs)}
+        self.total_steps = 0
+        self.save_freq = 10000  # Save every 10k steps
         
     def _on_step(self) -> bool:
+        self.total_steps += 1
         for env_idx in range(len(self.locals['rewards'])):
             self.total_rewards[env_idx] += self.locals['rewards'][env_idx]
             self.step_count[env_idx] += 1
@@ -98,6 +101,11 @@ class RewardLoggerCallback(BaseCallback):
             if self.step_count[env_idx] % self.check_freq == 0:
                 with open(f'game{env_idx+1}.txt', 'a') as f:
                     f.write(f"{self.total_rewards[env_idx]}\n")
+        
+        if self.total_steps % self.save_freq == 0:
+            # Save checkpoint
+            self.model.save(f"moon_lander_checkpoint_{self.total_steps}")
+            print(f"\nSaved checkpoint at {self.total_steps} steps")
         
         return True
 
