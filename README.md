@@ -1,4 +1,4 @@
-# Moon Lander AI Project
+# Moon Lander AI Project - PPO
 
 This project implements a Moon Lander game where an AI agent learns to land a rocket on a target using Proximal Policy Optimization (PPO), a state-of-the-art reinforcement learning algorithm.
 
